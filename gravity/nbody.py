@@ -6,13 +6,13 @@ ti.init(arch=ti.cpu)
 
 # Constants
 G = 6.67430e-11  # Gravitational constant
-num_bodies = 500  # Number of smaller bodies
+num_bodies = 200  # Number of smaller bodies
 dt = 1e6  # Time step
 softening = 1e3  # Softening parameter
 
 # Disk parameters
 disk_radius = 5e10  # Radius of the disk
-min_radius = 1e10   # Minimum radius from center
+min_radius = 1e5   # Minimum radius from center
 
 # Central body parameters
 central_mass = 1e25  # Mass of the central body (much larger than disk particles)
