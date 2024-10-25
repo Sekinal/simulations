@@ -6,54 +6,62 @@ ti.init(arch=ti.cpu)
 
 # Constants
 G = 6.67430e-11  # Gravitational constant
-num_bodies = 1000  # Number of bodies
-dt = 1e4  # Time step
+num_bodies = 500  # Number of smaller bodies
+dt = 1e6  # Time step
 softening = 1e3  # Softening parameter
 
 # Disk parameters
 disk_radius = 5e10  # Radius of the disk
 min_radius = 1e10   # Minimum radius from center
 
+# Central body parameters
+central_mass = 1e25  # Mass of the central body (much larger than disk particles)
+total_bodies = num_bodies + 1  # Add one for the central body
+
 # Define fields for positions, velocities, masses, and accelerations
-pos = ti.Vector.field(2, dtype=ti.f32, shape=num_bodies)
-vel = ti.Vector.field(2, dtype=ti.f32, shape=num_bodies)
-mass = ti.field(dtype=ti.f32, shape=num_bodies)
-acc = ti.Vector.field(2, dtype=ti.f32, shape=num_bodies)
+pos = ti.Vector.field(2, dtype=ti.f32, shape=total_bodies)
+vel = ti.Vector.field(2, dtype=ti.f32, shape=total_bodies)
+mass = ti.field(dtype=ti.f32, shape=total_bodies)
+acc = ti.Vector.field(2, dtype=ti.f32, shape=total_bodies)
 
 @ti.kernel
 def initialize():
-    for i in range(num_bodies):
+    # Initialize central body (at index 0)
+    pos[0] = ti.Vector([0.0, 0.0])  # Center position
+    vel[0] = ti.Vector([0.0, 0.0])  # Stationary
+    mass[0] = central_mass
+
+    # Initialize disk particles
+    for i in range(1, total_bodies):
         # Generate random angle and radius for polar coordinates
-        theta = ti.random() * 2.0 * math.pi  # Random angle
-        # Random radius with square root distribution for uniform density
+        theta = ti.random() * 2.0 * math.pi
         radius = ti.sqrt(ti.random()) * (disk_radius - min_radius) + min_radius
         
         # Convert polar to Cartesian coordinates
         pos[i] = ti.Vector([
-            radius * ti.cos(theta),  # x position
-            radius * ti.sin(theta)   # y position
+            radius * ti.cos(theta),
+            radius * ti.sin(theta)
         ])
         
-        # Initialize orbital velocities
-        # Calculating orbital velocity for approximate circular motion
-        orbital_speed = ti.sqrt(G * 1e24 / radius)  # Simple circular orbit speed
+        # Calculate orbital velocity for circular orbit around central mass
+        orbital_speed = ti.sqrt(G * central_mass / radius)
         vel[i] = ti.Vector([
-            -orbital_speed * ti.sin(theta),  # Perpendicular to radius
+            -orbital_speed * ti.sin(theta),
             orbital_speed * ti.cos(theta)
         ])
         
-        # Randomize masses (smaller range for more stability)
-        mass[i] = ti.random() * 1e23 + 1e22
+        # Set masses for disk particles
+        mass[i] = ti.random() * 1e20 + 1e19
 
 @ti.kernel
 def compute_accelerations():
     # Reset accelerations
-    for i in range(num_bodies):
+    for i in range(total_bodies):
         acc[i] = ti.Vector([0.0, 0.0])
 
     # Compute pairwise gravitational forces
-    for i in range(num_bodies):
-        for j in range(num_bodies):
+    for i in range(total_bodies):
+        for j in range(total_bodies):
             if i != j:
                 r = pos[j] - pos[i]
                 dist = r.norm() + softening
@@ -62,14 +70,14 @@ def compute_accelerations():
 
 @ti.kernel
 def update():
-    for i in range(num_bodies):
+    for i in range(total_bodies):
         # Update velocities and positions
         vel[i] += acc[i] * dt
         pos[i] += vel[i] * dt
 
 # Set up the GUI
 window_size = 800
-gui = ti.GUI("2D Disk N-body Simulation", res=(window_size, window_size))
+gui = ti.GUI("2D Disk with Central Body", res=(window_size, window_size))
 
 def run_simulation():
     initialize()
@@ -85,12 +93,17 @@ def run_simulation():
 
         # Prepare positions for visualization
         pos_np = pos.to_numpy()
-        # Normalize positions to [0, 1] for visualization
-        pos_norm = (pos_np / (disk_radius * 1.5)) + 0.5  # Adjusted scale factor
+        pos_norm = (pos_np / (disk_radius * 1.5)) + 0.5
+
+        # Clear screen
+        gui.clear(0x112F41)
+
+        # Draw disk particles (indices 1 and above)
+        gui.circles(pos_norm[1:], radius=2, color=0xFFFFFF)
         
-        # Clear screen and draw particles
-        gui.clear(0x112F41)  # Dark blue background
-        gui.circles(pos_norm, radius=2, color=0xFFFFFF)
+        # Draw central body (larger and different color)
+        gui.circle(pos_norm[0], radius=10, color=0xFF9933)  # Orange color
+        
         gui.show()
 
 if __name__ == "__main__":
